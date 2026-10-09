@@ -45,7 +45,7 @@ public class IncidentService {
 
     public IncidentResponse updateIncident(Long id, IncidentRequest request) {
         if (!incidents.containsKey(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Incident not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid incident ID: " + id);
         }
 
         IncidentResponse updated = new IncidentResponse(
@@ -60,7 +60,7 @@ public class IncidentService {
 
     public void deleteIncident(Long id) {
         if (incidents.remove(id) == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Incident not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid incident ID: " + id);
         }
     }
 }

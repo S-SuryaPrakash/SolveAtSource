@@ -2,6 +2,7 @@ package com.example.resolveX.controller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,13 +38,13 @@ public class IncidentController {
     }
 
     @PostMapping
-    public ResponseEntity<IncidentResponse> createIncident(@RequestBody IncidentRequest request) {
+    public ResponseEntity<IncidentResponse> createIncident(@Valid @RequestBody IncidentRequest request) {
         IncidentResponse response = incidentService.createIncident(request);
         return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}")
-    public IncidentResponse updateIncident(@PathVariable Long id, @RequestBody IncidentRequest request) {
+    public IncidentResponse updateIncident(@PathVariable Long id, @Valid @RequestBody IncidentRequest request) {
         return incidentService.updateIncident(id, request);
     }
 
