@@ -6,12 +6,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.dto.IncidentResponse;
+import com.example.resolveX.exception.IncidentNotFoundException;
 
 @Service
 public class IncidentService {
@@ -26,7 +25,7 @@ public class IncidentService {
     public IncidentResponse getIncidentById(Long id) {
         IncidentResponse incident = incidents.get(id);
         if (incident == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Incident not found");
+            throw new IncidentNotFoundException(id);
         }
         return incident;
     }
@@ -45,7 +44,7 @@ public class IncidentService {
 
     public IncidentResponse updateIncident(Long id, IncidentRequest request) {
         if (!incidents.containsKey(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid incident ID: " + id);
+            throw new IncidentNotFoundException(id);
         }
 
         IncidentResponse updated = new IncidentResponse(
@@ -60,7 +59,7 @@ public class IncidentService {
 
     public void deleteIncident(Long id) {
         if (incidents.remove(id) == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Invalid incident ID: " + id);
+            throw new IncidentNotFoundException(id);
         }
     }
 }
