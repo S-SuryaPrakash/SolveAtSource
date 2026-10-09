@@ -3,20 +3,24 @@ package com.example.resolveX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 
-import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.service.IncidentService;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 class ResolveXApplicationTests {
 	@Autowired
-	private Validator validator;
+	private MockMvc mockMvc;
 
 	@Test
 	void contextLoads() {
@@ -45,10 +49,44 @@ class ResolveXApplicationTests {
 	}
 
 	@Test
-	void incidentRequestRejectsMissingRequiredFieldsAndOversizedDescription() {
-		IncidentRequest request = new IncidentRequest(" ", "x".repeat(2001), "", " ", "");
+	void createIncidentAcceptsValidTitleAndDescription() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"%s","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						""".formatted("T".repeat(120))))
+				.andExpect(status().isOk());
+	}
 
-		assertEquals(5, validator.validate(request).size());
+	@Test
+	void createIncidentRejectsEmptyTitle() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":" ","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void createIncidentRejectsMissingRequiredField() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"Network outage","description":"Network outage","status":"OPEN","priority":"HIGH"}
+						"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void createIncidentRejectsTitleLongerThan120Characters() throws Exception {
+		String title = "T".repeat(121);
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"%s","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						""".formatted(title)))
+				.andExpect(status().isBadRequest());
 	}
 
 }
