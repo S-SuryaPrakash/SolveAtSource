@@ -10,9 +10,13 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "incidents")
+@NoArgsConstructor
+@AllArgsConstructor
 public class Incident {
 
     @Id
@@ -39,9 +43,6 @@ public class Incident {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
-
-    public Incident() {
-    }
 
     public Incident(String title, String description, String status, String priority, String category) {
         this.title = title;
