@@ -10,56 +10,85 @@ import org.springframework.stereotype.Service;
 
 import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.dto.IncidentResponse;
+import com.example.resolveX.entity.Incident;
 import com.example.resolveX.exception.IncidentNotFoundException;
 
 @Service
 public class IncidentService {
 
-    private final Map<Long, IncidentResponse> incidents = new ConcurrentHashMap<>();
+    private final Map<Long, Incident> incidents = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong(1L);
 
-    public List<IncidentResponse> getAllIncidents() {
-        return new ArrayList<>(incidents.values());
+    public List<IncidentResponse> getAllIncidents(String status, String priority, String category, String title) {
+        return incidents.values().stream()
+                .filter(incident -> matchesFilter(incident.getStatus(), status))
+                .filter(incident -> matchesFilter(incident.getPriority(), priority))
+                .filter(incident -> matchesFilter(incident.getCategory(), category))
+                .filter(incident -> title == null || title.isBlank() ||
+                        (incident.getTitle() != null && incident.getTitle().toLowerCase().contains(title.toLowerCase())))
+                .map(this::toResponse)
+                .toList();
     }
 
     public IncidentResponse getIncidentById(Long id) {
-        IncidentResponse incident = incidents.get(id);
+        Incident incident = incidents.get(id);
         if (incident == null) {
             throw new IncidentNotFoundException(id);
         }
-        return incident;
+        return toResponse(incident);
     }
 
     public IncidentResponse createIncident(IncidentRequest request) {
         long id = sequence.getAndIncrement();
-        IncidentResponse response = new IncidentResponse(
-                id,
+        Incident incident = new Incident(
+                request == null || request.title() == null ? "" : request.title(),
                 request == null || request.description() == null ? "" : request.description(),
+                request == null || request.status() == null || request.status().isBlank() ? "OPEN" : request.status(),
                 request == null || request.priority() == null || request.priority().isBlank() ? "MEDIUM" : request.priority(),
                 request == null || request.category() == null || request.category().isBlank() ? "GENERAL" : request.category()
         );
-        incidents.put(id, response);
-        return response;
+        incident.setId(id);
+        incidents.put(id, incident);
+        return toResponse(incident);
     }
 
     public IncidentResponse updateIncident(Long id, IncidentRequest request) {
-        if (!incidents.containsKey(id)) {
+        Incident existing = incidents.get(id);
+        if (existing == null) {
             throw new IncidentNotFoundException(id);
         }
 
-        IncidentResponse updated = new IncidentResponse(
-                id,
-                request == null || request.description() == null ? "" : request.description(),
-                request == null || request.priority() == null || request.priority().isBlank() ? "MEDIUM" : request.priority(),
-                request == null || request.category() == null || request.category().isBlank() ? "GENERAL" : request.category()
-        );
-        incidents.put(id, updated);
-        return updated;
+        existing.setTitle(request == null || request.title() == null ? existing.getTitle() : request.title());
+        existing.setDescription(request == null || request.description() == null ? existing.getDescription() : request.description());
+        existing.setStatus(request == null || request.status() == null || request.status().isBlank() ? existing.getStatus() : request.status());
+        existing.setPriority(request == null || request.priority() == null || request.priority().isBlank() ? existing.getPriority() : request.priority());
+        existing.setCategory(request == null || request.category() == null || request.category().isBlank() ? existing.getCategory() : request.category());
+
+        incidents.put(id, existing);
+        return toResponse(existing);
     }
 
     public void deleteIncident(Long id) {
         if (incidents.remove(id) == null) {
             throw new IncidentNotFoundException(id);
         }
+    }
+
+    private boolean matchesFilter(String actualValue, String filterValue) {
+        if (filterValue == null || filterValue.isBlank()) {
+            return true;
+        }
+        return actualValue != null && actualValue.equalsIgnoreCase(filterValue.trim());
+    }
+
+    private IncidentResponse toResponse(Incident incident) {
+        return new IncidentResponse(
+                incident.getId(),
+                incident.getTitle(),
+                incident.getDescription(),
+                incident.getStatus(),
+                incident.getPriority(),
+                incident.getCategory()
+        );
     }
 }

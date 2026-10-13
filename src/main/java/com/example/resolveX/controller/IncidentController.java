@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.example.resolveX.dto.IncidentRequest;
@@ -18,7 +19,7 @@ import com.example.resolveX.dto.IncidentResponse;
 import com.example.resolveX.service.IncidentService;
 
 @RestController
-@RequestMapping("/incident")
+@RequestMapping({"/incident", "/incidents"})
 public class IncidentController {
 
     private final IncidentService incidentService;
@@ -28,8 +29,12 @@ public class IncidentController {
     }
 
     @GetMapping
-    public List<IncidentResponse> getAllIncidents() {
-        return incidentService.getAllIncidents();
+    public List<IncidentResponse> getAllIncidents(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String title) {
+        return incidentService.getAllIncidents(status, priority, category, title);
     }
 
     @GetMapping("/{id}")

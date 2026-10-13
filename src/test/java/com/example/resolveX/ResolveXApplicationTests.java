@@ -66,6 +66,54 @@ class ResolveXApplicationTests {
 	}
 
 	@Test
+	void getIncidentsSupportsStatusAndPriorityFilters() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"Filter by OPEN","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"Filter by CLOSED","description":"Power issue","status":"CLOSED","priority":"LOW","category":"POWER"}
+						"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/incidents")
+				.param("status", "OPEN")
+				.param("priority", "HIGH"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].status").value("OPEN"))
+				.andExpect(jsonPath("$[0].priority").value("HIGH"));
+	}
+
+	@Test
+	void getIncidentsSupportsCategoryAndTitleFilters() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"Network outage in east wing","description":"Server down","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"title":"Power failure backup generator","description":"Power issue","status":"CLOSED","priority":"LOW","category":"POWER"}
+						"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/incidents")
+				.param("category", "NETWORK")
+				.param("title", "wing"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].category").value("NETWORK"))
+				.andExpect(jsonPath("$[0].title").value("Network outage in east wing"));
+	}
+
+	@Test
 	void createIncidentRejectsEmptyTitle() throws Exception {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
