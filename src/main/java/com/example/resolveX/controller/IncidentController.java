@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.dto.IncidentResponse;
+import com.example.resolveX.dto.PaginatedIncidentResponse;
 import com.example.resolveX.service.IncidentService;
 
 @RestController
@@ -29,12 +30,14 @@ public class IncidentController {
     }
 
     @GetMapping
-    public List<IncidentResponse> getAllIncidents(
+    public PaginatedIncidentResponse getAllIncidents(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String priority,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String title) {
-        return incidentService.getAllIncidents(status, priority, category, title);
+        return incidentService.getAllIncidents(page, size, status, priority, category, title);
     }
 
     @GetMapping("/{id}")

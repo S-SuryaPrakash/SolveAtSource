@@ -10,24 +10,44 @@ import org.springframework.stereotype.Service;
 
 import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.dto.IncidentResponse;
+import com.example.resolveX.dto.PaginatedIncidentResponse;
 import com.example.resolveX.entity.Incident;
 import com.example.resolveX.exception.IncidentNotFoundException;
 
 @Service
 public class IncidentService {
 
+    private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final int MAX_PAGE_SIZE = 50;
+
     private final Map<Long, Incident> incidents = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong(1L);
 
-    public List<IncidentResponse> getAllIncidents(String status, String priority, String category, String title) {
-        return incidents.values().stream()
+    public PaginatedIncidentResponse getAllIncidents(int page, int size, String status, String priority,
+            String category, String title) {
+        validatePagination(page, size);
+
+        List<Incident> filteredIncidents = incidents.values().stream()
                 .filter(incident -> matchesFilter(incident.getStatus(), status))
                 .filter(incident -> matchesFilter(incident.getPriority(), priority))
                 .filter(incident -> matchesFilter(incident.getCategory(), category))
                 .filter(incident -> title == null || title.isBlank() ||
                         (incident.getTitle() != null && incident.getTitle().toLowerCase().contains(title.toLowerCase())))
+                .toList();
+
+        int totalItems = filteredIncidents.size();
+        int fromIndex = page * size;
+        if (fromIndex >= totalItems) {
+            return new PaginatedIncidentResponse(List.of(), page, size, 0, false);
+        }
+
+        int toIndex = Math.min(fromIndex + size, totalItems);
+        List<IncidentResponse> pageItems = filteredIncidents.subList(fromIndex, toIndex).stream()
                 .map(this::toResponse)
                 .toList();
+
+        boolean hasNext = toIndex < totalItems;
+        return new PaginatedIncidentResponse(pageItems, page, size, totalItems, hasNext);
     }
 
     public IncidentResponse getIncidentById(Long id) {
@@ -36,6 +56,18 @@ public class IncidentService {
             throw new IncidentNotFoundException(id);
         }
         return toResponse(incident);
+    }
+
+    private void validatePagination(int page, int size) {
+        if (page < 0) {
+            throw new IllegalArgumentException("Page number must be greater than or equal to 0");
+        }
+        if (size <= 0) {
+            throw new IllegalArgumentException("Page size must be greater than 0");
+        }
+        if (size > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("Page size must not exceed 50");
+        }
     }
 
     public IncidentResponse createIncident(IncidentRequest request) {

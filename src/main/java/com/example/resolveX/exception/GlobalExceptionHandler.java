@@ -24,4 +24,9 @@ public class GlobalExceptionHandler {
                 .toList());
         return problem;
     }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ProblemDetail handleIllegalArgument(IllegalArgumentException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
 }

@@ -85,8 +85,10 @@ class ResolveXApplicationTests {
 				.param("status", "OPEN")
 				.param("priority", "HIGH"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].status").value("OPEN"))
-				.andExpect(jsonPath("$[0].priority").value("HIGH"));
+				.andExpect(jsonPath("$.items[0].status").value("OPEN"))
+				.andExpect(jsonPath("$.items[0].priority").value("HIGH"))
+				.andExpect(jsonPath("$.page").value(0))
+				.andExpect(jsonPath("$.size").value(10));
 	}
 
 	@Test
@@ -109,8 +111,73 @@ class ResolveXApplicationTests {
 				.param("category", "NETWORK")
 				.param("title", "wing"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].category").value("NETWORK"))
-				.andExpect(jsonPath("$[0].title").value("Network outage in east wing"));
+				.andExpect(jsonPath("$.items[0].category").value("NETWORK"))
+				.andExpect(jsonPath("$.items[0].title").value("Network outage in east wing"));
+	}
+
+	@Test
+	void getIncidentsAppliesManualPagination() throws Exception {
+		for (int i = 1; i <= 5; i++) {
+			mockMvc.perform(post("/incident")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+							{"title":"Pagination Incident %d","description":"Test %d","status":"PAGINATION_TEST","priority":"HIGH","category":"PAGINATION_TEST"}
+							""".formatted(i, i)))
+					.andExpect(status().isOk());
+		}
+
+		mockMvc.perform(get("/incidents")
+				.param("page", "1")
+				.param("size", "2")
+				.param("status", "PAGINATION_TEST")
+				.param("category", "PAGINATION_TEST"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].title").value("Pagination Incident 3"))
+				.andExpect(jsonPath("$.items[1].title").value("Pagination Incident 4"))
+				.andExpect(jsonPath("$.page").value(1))
+				.andExpect(jsonPath("$.size").value(2))
+				.andExpect(jsonPath("$.totalItems").value(5))
+				.andExpect(jsonPath("$.hasNext").value(true));
+	}
+
+	@Test
+	void getIncidentsRejectsNegativePageNumber() throws Exception {
+		mockMvc.perform(get("/incidents")
+				.param("page", "-1")
+				.param("size", "10"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("Page number must be greater than or equal to 0"));
+	}
+
+	@Test
+	void getIncidentsRejectsZeroPageSize() throws Exception {
+		mockMvc.perform(get("/incidents")
+				.param("page", "0")
+				.param("size", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("Page size must be greater than 0"));
+	}
+
+	@Test
+	void getIncidentsRejectsUnreasonablyLargePageSize() throws Exception {
+		mockMvc.perform(get("/incidents")
+				.param("page", "0")
+				.param("size", "1000"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("Page size must not exceed 50"));
+	}
+
+	@Test
+	void getIncidentsReturnsEmptyListWhenPageBeyondAvailableResults() throws Exception {
+		mockMvc.perform(get("/incidents")
+				.param("page", "99")
+				.param("size", "10")
+				.param("status", "PAGE_NOT_FOUND_STATUS"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items").isArray())
+				.andExpect(jsonPath("$.items.length()").value(0))
+				.andExpect(jsonPath("$.totalItems").value(0))
+				.andExpect(jsonPath("$.hasNext").value(false));
 	}
 
 	@Test
