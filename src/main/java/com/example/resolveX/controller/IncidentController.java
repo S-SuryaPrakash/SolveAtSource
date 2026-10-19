@@ -1,7 +1,5 @@
 package com.example.resolveX.controller;
 
-import java.util.List;
-
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -36,8 +34,12 @@ public class IncidentController {
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String priority,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String title) {
-        return incidentService.getAllIncidents(page, size, status, priority, category, title);
+            @RequestParam(required = false) String title,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDirection,
+            @RequestParam(required = false) String groupBy) {
+        return incidentService.getAllIncidents(
+                page, size, status, priority, category, title, sortBy, sortDirection, groupBy);
     }
 
     @GetMapping("/{id}")

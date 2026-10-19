@@ -141,6 +141,49 @@ class ResolveXApplicationTests {
 	}
 
 	@Test
+	void getIncidentsSortsByAnySupportedField() throws Exception {
+		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"Zulu sort\",\"description\":\"z\",\"status\":\"OPEN\",\"priority\":\"LOW\",\"category\":\"SORT_TEST\"}"))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"Alpha sort\",\"description\":\"a\",\"status\":\"CLOSED\",\"priority\":\"HIGH\",\"category\":\"SORT_TEST\"}"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/incidents").param("category", "SORT_TEST")
+				.param("sortBy", "title").param("sortDirection", "desc"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].title").value("Zulu sort"))
+				.andExpect(jsonPath("$.items[1].title").value("Alpha sort"));
+	}
+
+	@Test
+	void getIncidentsGroupsTheCurrentPageByPriority() throws Exception {
+		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"High group\",\"description\":\"test\",\"status\":\"OPEN\",\"priority\":\"HIGH\",\"category\":\"GROUP_TEST\"}"))
+				.andExpect(status().isOk());
+		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"Low group\",\"description\":\"test\",\"status\":\"OPEN\",\"priority\":\"LOW\",\"category\":\"GROUP_TEST\"}"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/incidents").param("category", "GROUP_TEST")
+				.param("sortBy", "priority").param("groupBy", "priority"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.groups[0].value").value("HIGH"))
+				.andExpect(jsonPath("$.groups[0].items[0].priority").value("HIGH"))
+				.andExpect(jsonPath("$.groups[1].value").value("LOW"));
+	}
+
+	@Test
+	void getIncidentsRejectsUnsupportedSortAndGroupFields() throws Exception {
+		mockMvc.perform(get("/incidents").param("sortBy", "reporter"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("sortBy must be one of: id, title, description, status, priority, category, createdAt, updatedAt"));
+		mockMvc.perform(get("/incidents").param("groupBy", "owner"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("groupBy must be one of: id, title, description, status, priority, category, createdAt, updatedAt"));
+	}
+
+	@Test
 	void getIncidentsRejectsNegativePageNumber() throws Exception {
 		mockMvc.perform(get("/incidents")
 				.param("page", "-1")
