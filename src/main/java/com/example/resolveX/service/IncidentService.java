@@ -1,74 +1,89 @@
 package com.example.resolveX.service;
 
-import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.example.resolveX.dto.IncidentGroupResponse;
 import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.dto.IncidentResponse;
-import com.example.resolveX.dto.IncidentGroupResponse;
 import com.example.resolveX.dto.PaginatedIncidentResponse;
 import com.example.resolveX.entity.Incident;
 import com.example.resolveX.exception.IncidentNotFoundException;
+import com.example.resolveX.repository.IncidentRepository;
 
 @Service
 public class IncidentService {
 
-    private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 50;
 
-    private final Map<Long, Incident> incidents = new ConcurrentHashMap<>();
-    private final AtomicLong sequence = new AtomicLong(1L);
+    private final IncidentRepository incidentRepository;
 
+    public IncidentService(IncidentRepository incidentRepository) {
+        this.incidentRepository = incidentRepository;
+    }
+
+    @Transactional(readOnly = true)
     public PaginatedIncidentResponse getAllIncidents(int page, int size, String status, String priority,
             String category, String title, String sortBy, String sortDirection, String groupBy) {
         validatePagination(page, size);
-        Comparator<Incident> comparator = incidentComparator(sortBy);
+        String normalizedSortBy = normalizeField(sortBy, "sortBy");
         String normalizedGroupBy = groupBy == null || groupBy.isBlank() ? null : normalizeField(groupBy, "groupBy");
-        if ("desc".equalsIgnoreCase(sortDirection)) {
-            comparator = comparator.reversed();
-        } else if (!"asc".equalsIgnoreCase(sortDirection)) {
-            throw new IllegalArgumentException("sortDirection must be either asc or desc");
-        }
+        Sort.Direction direction = parseSortDirection(sortDirection);
 
-        List<Incident> filteredIncidents = incidents.values().stream()
-                .filter(incident -> matchesFilter(incident.getStatus(), status))
-                .filter(incident -> matchesFilter(incident.getPriority(), priority))
-                .filter(incident -> matchesFilter(incident.getCategory(), category))
-                .filter(incident -> title == null || title.isBlank() ||
-                        (incident.getTitle() != null && incident.getTitle().toLowerCase().contains(title.toLowerCase())))
-                .sorted(comparator.thenComparing(Incident::getId, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList();
+        Specification<Incident> filters = hasExactValue("status", status)
+                .and(hasExactValue("priority", priority))
+                .and(hasExactValue("category", category))
+                .and(titleContains(title));
+        Sort sort = Sort.by(direction, normalizedSortBy).and(Sort.by(Sort.Direction.ASC, "id"));
+        Page<Incident> incidentPage = incidentRepository.findAll(filters, PageRequest.of(page, size, sort));
+        List<IncidentResponse> pageItems = incidentPage.getContent().stream().map(this::toResponse).toList();
 
-        int totalItems = filteredIncidents.size();
-        int fromIndex = page * size;
-        if (fromIndex >= totalItems) {
-            return new PaginatedIncidentResponse(List.of(), page, size, totalItems, false,
-                    normalizedGroupBy == null ? null : List.of());
-        }
-
-        int toIndex = Math.min(fromIndex + size, totalItems);
-        List<IncidentResponse> pageItems = filteredIncidents.subList(fromIndex, toIndex).stream()
-                .map(this::toResponse)
-                .toList();
-
-        boolean hasNext = toIndex < totalItems;
-        return new PaginatedIncidentResponse(pageItems, page, size, totalItems, hasNext,
-                normalizedGroupBy == null ? null : groupIncidents(pageItems, normalizedGroupBy));
+        return new PaginatedIncidentResponse(pageItems, page, size, incidentPage.getTotalElements(),
+                incidentPage.hasNext(), normalizedGroupBy == null ? null : groupIncidents(pageItems, normalizedGroupBy));
     }
 
+    @Transactional(readOnly = true)
     public IncidentResponse getIncidentById(Long id) {
-        Incident incident = incidents.get(id);
-        if (incident == null) {
-            throw new IncidentNotFoundException(id);
-        }
-        return toResponse(incident);
+        return toResponse(findIncident(id));
+    }
+
+    public IncidentResponse createIncident(IncidentRequest request) {
+        Incident incident = new Incident(
+                request == null || request.title() == null ? "" : request.title(),
+                request == null || request.description() == null ? "" : request.description(),
+                request == null || request.status() == null || request.status().isBlank() ? "OPEN" : request.status(),
+                request == null || request.priority() == null || request.priority().isBlank() ? "MEDIUM" : request.priority(),
+                request == null || request.category() == null || request.category().isBlank() ? "GENERAL" : request.category());
+        return toResponse(incidentRepository.save(incident));
+    }
+
+    @Transactional
+    public IncidentResponse updateIncident(Long id, IncidentRequest request) {
+        Incident existing = findIncident(id);
+        existing.setTitle(request == null || request.title() == null ? existing.getTitle() : request.title());
+        existing.setDescription(request == null || request.description() == null ? existing.getDescription() : request.description());
+        existing.setStatus(request == null || request.status() == null || request.status().isBlank() ? existing.getStatus() : request.status());
+        existing.setPriority(request == null || request.priority() == null || request.priority().isBlank() ? existing.getPriority() : request.priority());
+        existing.setCategory(request == null || request.category() == null || request.category().isBlank() ? existing.getCategory() : request.category());
+        return toResponse(incidentRepository.save(existing));
+    }
+
+    @Transactional
+    public void deleteIncident(Long id) {
+        incidentRepository.delete(findIncident(id));
+    }
+
+    private Incident findIncident(Long id) {
+        return incidentRepository.findById(id).orElseThrow(() -> new IncidentNotFoundException(id));
     }
 
     private void validatePagination(int page, int size) {
@@ -83,88 +98,39 @@ public class IncidentService {
         }
     }
 
-    public IncidentResponse createIncident(IncidentRequest request) {
-        long id = sequence.getAndIncrement();
-        Incident incident = new Incident(
-                request == null || request.title() == null ? "" : request.title(),
-                request == null || request.description() == null ? "" : request.description(),
-                request == null || request.status() == null || request.status().isBlank() ? "OPEN" : request.status(),
-                request == null || request.priority() == null || request.priority().isBlank() ? "MEDIUM" : request.priority(),
-                request == null || request.category() == null || request.category().isBlank() ? "GENERAL" : request.category()
-        );
-        incident.setId(id);
-        LocalDateTime now = LocalDateTime.now();
-        incident.setCreatedAt(now);
-        incident.setUpdatedAt(now);
-        incidents.put(id, incident);
-        return toResponse(incident);
+    private Specification<Incident> hasExactValue(String field, String value) {
+        return (root, query, criteriaBuilder) -> value == null || value.isBlank()
+                ? criteriaBuilder.conjunction()
+                : criteriaBuilder.equal(criteriaBuilder.lower(root.get(field)), value.trim().toLowerCase(Locale.ROOT));
     }
 
-    public IncidentResponse updateIncident(Long id, IncidentRequest request) {
-        Incident existing = incidents.get(id);
-        if (existing == null) {
-            throw new IncidentNotFoundException(id);
-        }
-
-        existing.setTitle(request == null || request.title() == null ? existing.getTitle() : request.title());
-        existing.setDescription(request == null || request.description() == null ? existing.getDescription() : request.description());
-        existing.setStatus(request == null || request.status() == null || request.status().isBlank() ? existing.getStatus() : request.status());
-        existing.setPriority(request == null || request.priority() == null || request.priority().isBlank() ? existing.getPriority() : request.priority());
-        existing.setCategory(request == null || request.category() == null || request.category().isBlank() ? existing.getCategory() : request.category());
-        existing.setUpdatedAt(LocalDateTime.now());
-
-        incidents.put(id, existing);
-        return toResponse(existing);
+    private Specification<Incident> titleContains(String title) {
+        return (root, query, criteriaBuilder) -> title == null || title.isBlank()
+                ? criteriaBuilder.conjunction()
+                : criteriaBuilder.like(criteriaBuilder.lower(root.get("title")),
+                        "%" + title.trim().toLowerCase(Locale.ROOT) + "%");
     }
 
-    public void deleteIncident(Long id) {
-        if (incidents.remove(id) == null) {
-            throw new IncidentNotFoundException(id);
-        }
-    }
-
-    private boolean matchesFilter(String actualValue, String filterValue) {
-        if (filterValue == null || filterValue.isBlank()) {
-            return true;
-        }
-        return actualValue != null && actualValue.equalsIgnoreCase(filterValue.trim());
-    }
-
-    private Comparator<Incident> incidentComparator(String sortBy) {
-        String normalizedSortBy = normalizeField(sortBy, "sortBy");
-        Comparator<String> strings = Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER);
-        return switch (normalizedSortBy) {
-            case "id" -> Comparator.comparing(Incident::getId, Comparator.nullsLast(Comparator.naturalOrder()));
-            case "title" -> Comparator.comparing(Incident::getTitle, strings);
-            case "description" -> Comparator.comparing(Incident::getDescription, strings);
-            case "status" -> Comparator.comparing(Incident::getStatus, strings);
-            case "priority" -> Comparator.comparing(Incident::getPriority, strings);
-            case "category" -> Comparator.comparing(Incident::getCategory, strings);
-            case "createdat" -> Comparator.comparing(Incident::getCreatedAt,
-                    Comparator.nullsLast(Comparator.naturalOrder()));
-            case "updatedat" -> Comparator.comparing(Incident::getUpdatedAt,
-                    Comparator.nullsLast(Comparator.naturalOrder()));
-            default -> throw unsupportedField("sortBy");
-        };
+    private Sort.Direction parseSortDirection(String sortDirection) {
+        return Sort.Direction.fromOptionalString(sortDirection)
+                .orElseThrow(() -> new IllegalArgumentException("sortDirection must be either asc or desc"));
     }
 
     private List<IncidentGroupResponse> groupIncidents(List<IncidentResponse> incidentsToGroup, String groupBy) {
-        String normalizedGroupBy = normalizeField(groupBy, "groupBy");
         Map<String, List<IncidentResponse>> groups = new LinkedHashMap<>();
         for (IncidentResponse incident : incidentsToGroup) {
-            String groupValue = switch (normalizedGroupBy) {
+            String groupValue = switch (groupBy) {
                 case "id" -> String.valueOf(incident.id());
                 case "title" -> incident.title();
                 case "description" -> incident.description();
                 case "status" -> incident.status();
                 case "priority" -> incident.priority();
                 case "category" -> incident.category();
-                case "createdat" -> String.valueOf(incident.createdAt());
-                case "updatedat" -> String.valueOf(incident.updatedAt());
+                case "createdAt" -> String.valueOf(incident.createdAt());
+                case "updatedAt" -> String.valueOf(incident.updatedAt());
                 default -> throw unsupportedField("groupBy");
             };
-            groups.computeIfAbsent(groupValue == null ? "" : groupValue, ignored -> new java.util.ArrayList<>())
-                    .add(incident);
+            groups.computeIfAbsent(groupValue == null ? "" : groupValue, ignored -> new java.util.ArrayList<>()).add(incident);
         }
         return groups.entrySet().stream()
                 .map(entry -> new IncidentGroupResponse(entry.getKey(), List.copyOf(entry.getValue())))
@@ -172,9 +138,11 @@ public class IncidentService {
     }
 
     private String normalizeField(String field, String parameterName) {
-        String normalizedField = field == null || field.isBlank() ? "id" : field.trim().toLowerCase();
+        String normalizedField = field == null || field.isBlank() ? "id" : field.trim().toLowerCase(Locale.ROOT);
         return switch (normalizedField) {
-            case "id", "title", "description", "status", "priority", "category", "createdat", "updatedat" -> normalizedField;
+            case "id", "title", "description", "status", "priority", "category" -> normalizedField;
+            case "createdat" -> "createdAt";
+            case "updatedat" -> "updatedAt";
             default -> throw unsupportedField(parameterName);
         };
     }
@@ -193,7 +161,6 @@ public class IncidentService {
                 incident.getPriority(),
                 incident.getCategory(),
                 incident.getCreatedAt(),
-                incident.getUpdatedAt()
-        );
+                incident.getUpdatedAt());
     }
 }

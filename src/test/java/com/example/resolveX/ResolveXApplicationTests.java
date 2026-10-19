@@ -1,8 +1,5 @@
 package com.example.resolveX;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -11,10 +8,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.example.resolveX.exception.IncidentNotFoundException;
-import com.example.resolveX.service.IncidentService;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,23 +26,19 @@ class ResolveXApplicationTests {
 	}
 
 	@Test
-	void updateWithInvalidIdReturnsNotFoundWithInvalidIdMessage() {
-		IncidentService service = new IncidentService();
-
-		IncidentNotFoundException exception = assertThrows(IncidentNotFoundException.class,
-				() -> service.updateIncident(999L, null));
-
-		assertEquals("Incident not found with ID: 999", exception.getMessage());
+	void updateWithInvalidIdReturnsNotFoundWithInvalidIdMessage() throws Exception {
+		mockMvc.perform(put("/incident/999")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"Missing\",\"description\":\"Test\",\"status\":\"OPEN\",\"priority\":\"LOW\",\"category\":\"TEST\"}"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.detail").value("Incident not found with ID: 999"));
 	}
 
 	@Test
-	void deleteWithInvalidIdReturnsNotFoundWithInvalidIdMessage() {
-		IncidentService service = new IncidentService();
-
-		IncidentNotFoundException exception = assertThrows(IncidentNotFoundException.class,
-				() -> service.deleteIncident(999L));
-
-		assertEquals("Incident not found with ID: 999", exception.getMessage());
+	void deleteWithInvalidIdReturnsNotFoundWithInvalidIdMessage() throws Exception {
+		mockMvc.perform(delete("/incident/999"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.detail").value("Incident not found with ID: 999"));
 	}
 
 	@Test
