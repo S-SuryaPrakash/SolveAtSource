@@ -1,0 +1,7 @@
+# Do not send local IDE, Git, build, or secret files to Docker during image builds.
+.git/
+.github/
+.idea/
+target/
+.env
+*.iml
