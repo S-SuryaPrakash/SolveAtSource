@@ -17,6 +17,8 @@ import com.example.resolveX.dto.IncidentRequest;
 import com.example.resolveX.dto.IncidentResponse;
 import com.example.resolveX.dto.PaginatedIncidentResponse;
 import com.example.resolveX.entity.Incident;
+import com.example.resolveX.entity.IncidentPriority;
+import com.example.resolveX.entity.IncidentStatus;
 import com.example.resolveX.exception.IncidentNotFoundException;
 import com.example.resolveX.repository.IncidentRepository;
 
@@ -38,9 +40,11 @@ public class IncidentService {
         String normalizedSortBy = normalizeField(sortBy, "sortBy");
         String normalizedGroupBy = groupBy == null || groupBy.isBlank() ? null : normalizeField(groupBy, "groupBy");
         Sort.Direction direction = parseSortDirection(sortDirection);
+        IncidentStatus statusFilter = status == null || status.isBlank() ? null : IncidentStatus.fromValue(status);
+        IncidentPriority priorityFilter = priority == null || priority.isBlank() ? null : IncidentPriority.fromValue(priority);
 
-        Specification<Incident> filters = hasExactValue("status", status)
-                .and(hasExactValue("priority", priority))
+        Specification<Incident> filters = hasEnumValue("status", statusFilter)
+                .and(hasEnumValue("priority", priorityFilter))
                 .and(hasExactValue("category", category))
                 .and(titleContains(title));
         Sort sort = Sort.by(direction, normalizedSortBy).and(Sort.by(Sort.Direction.ASC, "id"));
@@ -60,8 +64,8 @@ public class IncidentService {
         Incident incident = new Incident(
                 request == null || request.title() == null ? "" : request.title(),
                 request == null || request.description() == null ? "" : request.description(),
-                request == null || request.status() == null || request.status().isBlank() ? "OPEN" : request.status(),
-                request == null || request.priority() == null || request.priority().isBlank() ? "MEDIUM" : request.priority(),
+                request == null || request.status() == null ? IncidentStatus.NEW : request.status(),
+                request == null || request.priority() == null ? IncidentPriority.P3_MEDIUM : request.priority(),
                 request == null || request.category() == null || request.category().isBlank() ? "GENERAL" : request.category());
         return toResponse(incidentRepository.save(incident));
     }
@@ -71,8 +75,8 @@ public class IncidentService {
         Incident existing = findIncident(id);
         existing.setTitle(request == null || request.title() == null ? existing.getTitle() : request.title());
         existing.setDescription(request == null || request.description() == null ? existing.getDescription() : request.description());
-        existing.setStatus(request == null || request.status() == null || request.status().isBlank() ? existing.getStatus() : request.status());
-        existing.setPriority(request == null || request.priority() == null || request.priority().isBlank() ? existing.getPriority() : request.priority());
+        existing.setStatus(request == null || request.status() == null ? existing.getStatus() : request.status());
+        existing.setPriority(request == null || request.priority() == null ? existing.getPriority() : request.priority());
         existing.setCategory(request == null || request.category() == null || request.category().isBlank() ? existing.getCategory() : request.category());
         return toResponse(incidentRepository.save(existing));
     }
@@ -104,6 +108,12 @@ public class IncidentService {
                 : criteriaBuilder.equal(criteriaBuilder.lower(root.get(field)), value.trim().toLowerCase(Locale.ROOT));
     }
 
+    private Specification<Incident> hasEnumValue(String field, Enum<?> value) {
+        return (root, query, criteriaBuilder) -> value == null
+                ? criteriaBuilder.conjunction()
+                : criteriaBuilder.equal(root.get(field), value);
+    }
+
     private Specification<Incident> titleContains(String title) {
         return (root, query, criteriaBuilder) -> title == null || title.isBlank()
                 ? criteriaBuilder.conjunction()
@@ -123,8 +133,8 @@ public class IncidentService {
                 case "id" -> String.valueOf(incident.id());
                 case "title" -> incident.title();
                 case "description" -> incident.description();
-                case "status" -> incident.status();
-                case "priority" -> incident.priority();
+                case "status" -> incident.status().getDisplayValue();
+                case "priority" -> incident.priority().getDisplayValue();
                 case "category" -> incident.category();
                 case "createdAt" -> String.valueOf(incident.createdAt());
                 case "updatedAt" -> String.valueOf(incident.updatedAt());

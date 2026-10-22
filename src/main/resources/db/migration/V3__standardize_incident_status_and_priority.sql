@@ -1,0 +1,25 @@
+UPDATE incidents
+SET status = CASE UPPER(status)
+    WHEN 'OPEN' THEN 'NEW'
+    WHEN 'IN_PROGRESS' THEN 'WORK_IN_PROGRESS'
+    WHEN 'RESOLVED' THEN 'SOLUTION_PROPOSED'
+    WHEN 'CLOSED' THEN 'CLOSED'
+    ELSE status
+END;
+
+UPDATE incidents
+SET priority = CASE UPPER(priority)
+    WHEN 'LOW' THEN 'P4_LOW'
+    WHEN 'MEDIUM' THEN 'P3_MEDIUM'
+    WHEN 'HIGH' THEN 'P2_HIGH'
+    WHEN 'CRITICAL' THEN 'P1_CRITICAL'
+    ELSE priority
+END;
+
+ALTER TABLE incidents
+    ADD CONSTRAINT chk_incidents_status
+    CHECK (status IN ('NEW', 'WORK_IN_PROGRESS', 'SOLUTION_PROPOSED', 'CLOSED'));
+
+ALTER TABLE incidents
+    ADD CONSTRAINT chk_incidents_priority
+    CHECK (priority IN ('P4_LOW', 'P3_MEDIUM', 'P2_HIGH', 'P1_CRITICAL'));

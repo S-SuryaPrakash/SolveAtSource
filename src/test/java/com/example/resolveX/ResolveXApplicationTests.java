@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Testcontainers
 class ResolveXApplicationTests {
 	@Container
-	static final PostgreSQLContainer<?> postgreSQL = new PostgreSQLContainer<>("postgres:17-alpine");
+	static final PostgreSQLContainer postgreSQL = new PostgreSQLContainer("postgres:17-alpine");
 
 	@DynamicPropertySource
 	static void configureDataSource(DynamicPropertyRegistry registry) {
@@ -42,10 +42,44 @@ class ResolveXApplicationTests {
 	}
 
 	@Test
+	void openApiDocumentationIsAvailable() throws Exception {
+		mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.info.title").value("ResolveX Incident API"))
+				.andExpect(jsonPath("$.paths['/incidents']").exists());
+	}
+
+	@Test
+	void createIncidentRejectsMalformedJson() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"Incomplete JSON\""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("Malformed JSON request"));
+	}
+
+	@Test
+	void createIncidentRejectsUnsupportedStatus() throws Exception {
+		mockMvc.perform(post("/incident")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"Unsupported status\",\"description\":\"Test\",\"status\":\"OPEN\",\"priority\":\"P2 - High\",\"category\":\"TEST\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value(
+						"status must be one of: New, Work In Progress, Solution Proposed, Closed"));
+	}
+
+	@Test
+	void getIncidentRejectsNonNumericId() throws Exception {
+		mockMvc.perform(get("/incident/not-a-number"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value("id must be a valid long"));
+	}
+
+	@Test
 	void updateWithInvalidIdReturnsNotFoundWithInvalidIdMessage() throws Exception {
 		mockMvc.perform(put("/incident/999")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"title\":\"Missing\",\"description\":\"Test\",\"status\":\"OPEN\",\"priority\":\"LOW\",\"category\":\"TEST\"}"))
+				.content("{\"title\":\"Missing\",\"description\":\"Test\",\"status\":\"New\",\"priority\":\"P4 - Low\",\"category\":\"TEST\"}"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.detail").value("Incident not found with ID: 999"));
 	}
@@ -69,7 +103,7 @@ class ResolveXApplicationTests {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"%s","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						{"title":"%s","description":"Network outage","status":"New","priority":"P2 - High","category":"NETWORK"}
 						""".formatted("T".repeat(120))))
 				.andExpect(status().isOk());
 	}
@@ -79,23 +113,23 @@ class ResolveXApplicationTests {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"Filter by OPEN","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						{"title":"Filter by New","description":"Network outage","status":"New","priority":"P2 - High","category":"NETWORK"}
 						"""))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"Filter by CLOSED","description":"Power issue","status":"CLOSED","priority":"LOW","category":"POWER"}
+						{"title":"Filter by Closed","description":"Power issue","status":"Closed","priority":"P4 - Low","category":"POWER"}
 						"""))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(get("/incidents")
-				.param("status", "OPEN")
-				.param("priority", "HIGH"))
+				.param("status", "New")
+				.param("priority", "P2 - High"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.items[0].status").value("OPEN"))
-				.andExpect(jsonPath("$.items[0].priority").value("HIGH"))
+				.andExpect(jsonPath("$.items[0].status").value("New"))
+				.andExpect(jsonPath("$.items[0].priority").value("P2 - High"))
 				.andExpect(jsonPath("$.page").value(0))
 				.andExpect(jsonPath("$.size").value(10));
 	}
@@ -105,14 +139,14 @@ class ResolveXApplicationTests {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"Network outage in east wing","description":"Server down","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						{"title":"Network outage in east wing","description":"Server down","status":"New","priority":"P2 - High","category":"NETWORK"}
 						"""))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"Power failure backup generator","description":"Power issue","status":"CLOSED","priority":"LOW","category":"POWER"}
+						{"title":"Power failure backup generator","description":"Power issue","status":"Closed","priority":"P4 - Low","category":"POWER"}
 						"""))
 				.andExpect(status().isOk());
 
@@ -130,7 +164,7 @@ class ResolveXApplicationTests {
 			mockMvc.perform(post("/incident")
 					.contentType(MediaType.APPLICATION_JSON)
 					.content("""
-							{"title":"Pagination Incident %d","description":"Test %d","status":"PAGINATION_TEST","priority":"HIGH","category":"PAGINATION_TEST"}
+							{"title":"Pagination Incident %d","description":"Test %d","status":"New","priority":"P2 - High","category":"PAGINATION_TEST"}
 							""".formatted(i, i)))
 					.andExpect(status().isOk());
 		}
@@ -138,7 +172,7 @@ class ResolveXApplicationTests {
 		mockMvc.perform(get("/incidents")
 				.param("page", "1")
 				.param("size", "2")
-				.param("status", "PAGINATION_TEST")
+				.param("status", "New")
 				.param("category", "PAGINATION_TEST"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items[0].title").value("Pagination Incident 3"))
@@ -152,10 +186,10 @@ class ResolveXApplicationTests {
 	@Test
 	void getIncidentsSortsByAnySupportedField() throws Exception {
 		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"title\":\"Zulu sort\",\"description\":\"z\",\"status\":\"OPEN\",\"priority\":\"LOW\",\"category\":\"SORT_TEST\"}"))
+				.content("{\"title\":\"Zulu sort\",\"description\":\"z\",\"status\":\"New\",\"priority\":\"P4 - Low\",\"category\":\"SORT_TEST\"}"))
 				.andExpect(status().isOk());
 		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"title\":\"Alpha sort\",\"description\":\"a\",\"status\":\"CLOSED\",\"priority\":\"HIGH\",\"category\":\"SORT_TEST\"}"))
+				.content("{\"title\":\"Alpha sort\",\"description\":\"a\",\"status\":\"Closed\",\"priority\":\"P2 - High\",\"category\":\"SORT_TEST\"}"))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(get("/incidents").param("category", "SORT_TEST")
@@ -168,18 +202,18 @@ class ResolveXApplicationTests {
 	@Test
 	void getIncidentsGroupsTheCurrentPageByPriority() throws Exception {
 		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"title\":\"High group\",\"description\":\"test\",\"status\":\"OPEN\",\"priority\":\"HIGH\",\"category\":\"GROUP_TEST\"}"))
+				.content("{\"title\":\"High group\",\"description\":\"test\",\"status\":\"New\",\"priority\":\"P2 - High\",\"category\":\"GROUP_TEST\"}"))
 				.andExpect(status().isOk());
 		mockMvc.perform(post("/incident").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"title\":\"Low group\",\"description\":\"test\",\"status\":\"OPEN\",\"priority\":\"LOW\",\"category\":\"GROUP_TEST\"}"))
+				.content("{\"title\":\"Low group\",\"description\":\"test\",\"status\":\"New\",\"priority\":\"P4 - Low\",\"category\":\"GROUP_TEST\"}"))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(get("/incidents").param("category", "GROUP_TEST")
 				.param("sortBy", "priority").param("groupBy", "priority"))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.groups[0].value").value("HIGH"))
-				.andExpect(jsonPath("$.groups[0].items[0].priority").value("HIGH"))
-				.andExpect(jsonPath("$.groups[1].value").value("LOW"));
+				.andExpect(jsonPath("$.groups[0].value").value("P2 - High"))
+				.andExpect(jsonPath("$.groups[0].items[0].priority").value("P2 - High"))
+				.andExpect(jsonPath("$.groups[1].value").value("P4 - Low"));
 	}
 
 	@Test
@@ -224,7 +258,8 @@ class ResolveXApplicationTests {
 		mockMvc.perform(get("/incidents")
 				.param("page", "99")
 				.param("size", "10")
-				.param("status", "PAGE_NOT_FOUND_STATUS"))
+				.param("status", "New")
+				.param("category", "PAGE_NOT_FOUND_CATEGORY"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.items").isArray())
 				.andExpect(jsonPath("$.items.length()").value(0))
@@ -237,7 +272,7 @@ class ResolveXApplicationTests {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":" ","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						{"title":" ","description":"Network outage","status":"New","priority":"P2 - High","category":"NETWORK"}
 						"""))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.detail").value("Request validation failed"))
@@ -249,7 +284,7 @@ class ResolveXApplicationTests {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"Network outage","description":"Network outage","status":"OPEN","priority":"HIGH"}
+						{"title":"Network outage","description":"Network outage","status":"New","priority":"P2 - High"}
 						"""))
 				.andExpect(status().isBadRequest());
 	}
@@ -260,7 +295,7 @@ class ResolveXApplicationTests {
 		mockMvc.perform(post("/incident")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-						{"title":"%s","description":"Network outage","status":"OPEN","priority":"HIGH","category":"NETWORK"}
+						{"title":"%s","description":"Network outage","status":"New","priority":"P2 - High","category":"NETWORK"}
 						""".formatted(title)))
 				.andExpect(status().isBadRequest());
 	}

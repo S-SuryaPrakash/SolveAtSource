@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -26,10 +28,12 @@ public class Incident {
     private String description;
 
     @Column(nullable = false)
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private IncidentStatus status;
 
     @Column(nullable = false)
-    private String priority;
+    @Enumerated(EnumType.STRING)
+    private IncidentPriority priority;
 
     @Column(nullable = false)
     private String category;
@@ -43,7 +47,7 @@ public class Incident {
     protected Incident() {
     }
 
-    public Incident(String title, String description, String status, String priority, String category) {
+    public Incident(String title, String description, IncidentStatus status, IncidentPriority priority, String category) {
         this.title = title;
         this.description = description;
         this.status = status;
@@ -86,19 +90,19 @@ public class Incident {
         this.description = description;
     }
 
-    public String getStatus() {
+    public IncidentStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(IncidentStatus status) {
         this.status = status;
     }
 
-    public String getPriority() {
+    public IncidentPriority getPriority() {
         return priority;
     }
 
-    public void setPriority(String priority) {
+    public void setPriority(IncidentPriority priority) {
         this.priority = priority;
     }
 
