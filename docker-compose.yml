@@ -11,6 +11,9 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-resolvex}
       POSTGRES_USER: ${POSTGRES_USER:-resolvex}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-resolvex-api}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-30}
     ports:
       - "${APP_PORT:-8083}:8083"
     depends_on:
