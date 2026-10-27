@@ -1,5 +1,6 @@
 package com.example.resolveX.config;
 
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -14,6 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * stateless JWT validation and explicit authorization rules.</p>
  */
 @Configuration
+@EnableConfigurationProperties(BootstrapAdminProperties.class)
 public class SecurityConfiguration {
 
     @Bean
