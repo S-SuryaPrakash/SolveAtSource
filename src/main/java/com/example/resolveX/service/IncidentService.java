@@ -19,18 +19,23 @@ import com.example.resolveX.dto.PaginatedIncidentResponse;
 import com.example.resolveX.entity.Incident;
 import com.example.resolveX.entity.IncidentPriority;
 import com.example.resolveX.entity.IncidentStatus;
+import com.example.resolveX.entity.User;
 import com.example.resolveX.exception.IncidentNotFoundException;
 import com.example.resolveX.repository.IncidentRepository;
+import com.example.resolveX.repository.UserRepository;
 
 @Service
 public class IncidentService {
 
     private static final int MAX_PAGE_SIZE = 50;
+    private static final String HISTORICAL_IMPORT_EMAIL = "system@resolvex.local";
 
     private final IncidentRepository incidentRepository;
+    private final UserRepository userRepository;
 
-    public IncidentService(IncidentRepository incidentRepository) {
+    public IncidentService(IncidentRepository incidentRepository, UserRepository userRepository) {
         this.incidentRepository = incidentRepository;
+        this.userRepository = userRepository;
     }
 
     @Transactional(readOnly = true)
@@ -67,6 +72,7 @@ public class IncidentService {
                 request == null || request.status() == null ? IncidentStatus.NEW : request.status(),
                 request == null || request.priority() == null ? IncidentPriority.P3_MEDIUM : request.priority(),
                 request == null || request.category() == null || request.category().isBlank() ? "GENERAL" : request.category());
+        incident.setCreatedBy(historicalImportUser());
         return toResponse(incidentRepository.save(incident));
     }
 
@@ -88,6 +94,16 @@ public class IncidentService {
 
     private Incident findIncident(Long id) {
         return incidentRepository.findById(id).orElseThrow(() -> new IncidentNotFoundException(id));
+    }
+
+    /**
+     * Temporary compatibility owner while the current API remains unauthenticated.
+     * JWT authentication will replace this with the authenticated user before the
+     * incident-creation endpoint becomes protected.
+     */
+    private User historicalImportUser() {
+        return userRepository.findByEmail(HISTORICAL_IMPORT_EMAIL)
+                .orElseThrow(() -> new IllegalStateException("Historical Import user is missing"));
     }
 
     private void validatePagination(int page, int size) {
