@@ -17,7 +17,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * stateless JWT validation and explicit authorization rules.</p>
  */
 @Configuration
-@EnableConfigurationProperties(BootstrapAdminProperties.class)
+@EnableConfigurationProperties({BootstrapAdminProperties.class, JwtProperties.class})
 public class SecurityConfiguration {
 
     @Bean
